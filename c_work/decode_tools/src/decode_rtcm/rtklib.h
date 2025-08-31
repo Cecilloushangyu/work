@@ -55,7 +55,12 @@ extern "C" {
 #define EXPORT
 #endif
 
-#include "../process_output/log_manager.h"
+#include "../logger/logger.h"
+#define ENACMP
+#define ENAGAL
+#define ENAQZS
+#define ENAGLO
+#define ENAIRN
 
 /* constants -----------------------------------------------------------------*/
 
@@ -143,13 +148,6 @@ extern "C" {
 #define MAXPRNGPS   32                  /* max satellite PRN number of GPS */
 #define NSATGPS     (MAXPRNGPS-MINPRNGPS+1) /* number of GPS satellites */
 #define NSYSGPS     1
-
-    /* enable/disable system */
-#define ENAGLO
-#define ENAGAL
-#define ENAQZS
-#define ENACMP
-#define ENAIRN
 
 #ifdef ENAGLO
 #define MINPRNGLO   1                   /* min satellite slot number of GLONASS */
@@ -929,7 +927,7 @@ typedef struct {        /* RTCM control struct type */
     uint32_t nmsg3[400]; /* message count of RTCM 3 (1-299:1001-1299,300-329:4070-4099,0:ohter) */
     char opt[256];      /* RTCM dependent options */
 } rtcm_t;
-extern rtcm_t rtcm;
+
 typedef struct {        /* RINEX control struct type */
     gtime_t time;       /* message time */
     double ver;         /* RINEX version */

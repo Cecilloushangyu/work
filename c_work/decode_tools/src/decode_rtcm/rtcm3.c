@@ -1360,6 +1360,7 @@ static int decode_type1046(rtcm_t *rtcm)
 /* decode type 1042/63: Beidou ephemerides -----------------------------------*/
 static int decode_type1042(rtcm_t *rtcm)
 {
+
     eph_t eph={0};
     double toc,sqrtA,tt;
     char *msg;
@@ -1428,6 +1429,8 @@ static int decode_type1042(rtcm_t *rtcm)
     rtcm->nav.eph[sat-1]=eph;
     rtcm->ephset=0;
     rtcm->ephsat=sat;
+    // 在 eph.svh 赋值后，rtcm->nav.eph[sat-1]=eph; 之前添加
+    log_write("rtcmeph.txt", "$EPH1042,%d,%d,%.3f,%.3f",prn,week,time2gpst(eph.toe,&week),time2gpst(eph.toc,&week));
     return 2;
 }
 /* decode SSR message epoch time ---------------------------------------------*/
@@ -1996,7 +1999,7 @@ static void save_msm_obs(rtcm_t *rtcm, int sys, msm_h_t *h, const double *r,
     int i,j,k,type,prn,sat,fcn,index=0,idx[32];
     
     type=getbitu(rtcm->buff,24,12);
-
+    
     switch (sys) {
         case SYS_GPS: msm_type=q=rtcm->msmtype[0]; break;
         case SYS_GLO: msm_type=q=rtcm->msmtype[1]; break;
@@ -2021,6 +2024,7 @@ static void save_msm_obs(rtcm_t *rtcm, int sys, msm_h_t *h, const double *r,
         /* signal to rinex obs type */
         code[i]=obs2code(sig[i]);
         idx[i]=code2idx(sys,code[i]);
+        
         if (code[i]!=CODE_NONE) {
             if (q) q+=sprintf(q,"L%s%s",sig[i],i<h->nsig-1?",":"");
         }
@@ -2031,6 +2035,7 @@ static void save_msm_obs(rtcm_t *rtcm, int sys, msm_h_t *h, const double *r,
         }
     }
     trace(3,"rtcm3 %d: signals=%s\n",type,msm_type);
+    
     /* get signal index */
     sigindex(sys,code,h->nsig,rtcm->opt,idx);
     
@@ -2039,6 +2044,7 @@ static void save_msm_obs(rtcm_t *rtcm, int sys, msm_h_t *h, const double *r,
         prn=h->sats[i];
         if      (sys==SYS_QZS) prn+=MINPRNQZS-1;
         else if (sys==SYS_SBS) prn+=MINPRNSBS-1;
+        
         if ((sat=satno(sys,prn))) {
             tt=timediff(rtcm->obs.data[0].time,rtcm->time);
             if (rtcm->obsflag||fabs(tt)>1E-9) {
@@ -2067,9 +2073,10 @@ static void save_msm_obs(rtcm_t *rtcm, int sys, msm_h_t *h, const double *r,
         }
         for (k=0;k<h->nsig;k++) {
             if (!h->cellmask[k+i*h->nsig]) continue;
-
+            
             if (sat&&index>=0&&idx[k]>=0) {
                 freq=fcn<-7?0.0:code2freq(sys,code[k],fcn);
+                
                 /* pseudorange (m) */
                 if (r[i]!=0.0&&pr[j]>-1E12) {
                     rtcm->obs.data[index].P[idx[k]]=r[i]+pr[j];
@@ -2087,19 +2094,18 @@ static void save_msm_obs(rtcm_t *rtcm, int sys, msm_h_t *h, const double *r,
                     lossoflock(rtcm,sat,idx[k],lock[j])+(half[j]?3:0);
                 rtcm->obs.data[index].SNR [idx[k]]=(uint16_t)(cnr[j]/SNR_UNIT+0.5);
                 rtcm->obs.data[index].code[idx[k]]=code[k];
-                char tstr[64];
-                time2str(rtcm->obs.data[index].time,tstr,2);
-
-                write_log_line(LOG_TYPE_RTCMMSM,"%s,%d,%hhu,%d,%.3f,%.3f,%.3f,%.2f,%d",
-                       tstr,
-                       sys,
-                       rtcm->obs.data[index].code[idx[k]],
-                       rtcm->obs.data[index].sat,
-                       rtcm->obs.data[index].P[idx[k]],/* pseudorange (m) */
-                       rtcm->obs.data[index].L[idx[k]],/* carrier-phase (cycle) */
-                       rtcm->obs.data[index].D[idx[k]],/* doppler (hz) */
-                       rtcm->obs.data[index].SNR[idx[k]]/1000.0,
-                       rtcm->obs.data[index].LLI[idx[k]]);
+                char tstr[128];
+                time2str(rtcm->obs.data[index].time,tstr,3);
+                log_write("rtcmmsm.txt","%s,%d,%hhu,%d,%.3f,%.3f,%.3f,%.2f,%d",
+                               tstr,
+                               sys,
+                               rtcm->obs.data[index].code[idx[k]],
+                               rtcm->obs.data[index].sat,
+                               rtcm->obs.data[index].P[idx[k]],/* pseudorange (m) */
+                               rtcm->obs.data[index].L[idx[k]],/* carrier-phase (cycle) */
+                               rtcm->obs.data[index].D[idx[k]],/* doppler (hz) */
+                               rtcm->obs.data[index].SNR[idx[k]]/1000.0,
+                               rtcm->obs.data[index].LLI[idx[k]]);
             }
             j++;
         }
@@ -2397,7 +2403,7 @@ static int decode_msm7(rtcm_t *rtcm, int sys)
     for (j=0;j<h.nsat;j++) { /* extended info */
         ex[j]=getbitu(rtcm->buff,i, 4); i+= 4;
     }
-    for (j=0;j<h.nsat;j++) { /* rough ranges modulo 1 millisecond*/
+    for (j=0;j<h.nsat;j++) {
         rng_m=getbitu(rtcm->buff,i,10); i+=10;
         if (r[j]!=0.0) r[j]+=rng_m*P2_10*RANGE_MS;
     }
@@ -2429,6 +2435,7 @@ static int decode_msm7(rtcm_t *rtcm, int sys)
     }
     /* save obs data in msm message */
     save_msm_obs(rtcm,sys,&h,r,pr,cp,rr,rrf,cnr,lock,ex,half);
+    
     rtcm->obsflag=!sync;
     return sync?0:1;
 }
@@ -2548,6 +2555,7 @@ extern int decode_rtcm3(rtcm_t *rtcm)
     int ret=0,type=getbitu(rtcm->buff,24,12),week;
     
     trace(3,"decode_rtcm3: len=%3d type=%d\n",rtcm->len,type);
+    
     if (rtcm->outtype) {
         sprintf(rtcm->msgtype,"RTCM %4d (%4d):",type,rtcm->len);
     }

@@ -68,10 +68,10 @@
 #define P2P16       65536.0               /* 2^16 */
 
 #define SQR(x)      ((x)*(x))
-
 /* get sign-magnitude bits ---------------------------------------------------*/
 static double getbitg(const uint8_t *buff, int pos, int len)
 {
     double value=getbitu(buff,pos+1,len-1);
     return getbitu(buff,pos,1)?-value:value;
 }
+
